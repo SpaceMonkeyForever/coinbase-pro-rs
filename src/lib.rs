@@ -95,3 +95,5 @@ pub const SANDBOX_URL: &str = "https://api-public.sandbox.pro.coinbase.com";
 pub const WS_URL: &str = "wss://ws-feed.pro.coinbase.com";
 /// wss://ws-feed-public.sandbox.pro.coinbase.com
 pub const WS_SANDBOX_URL: &str = "wss://ws-feed-public.sandbox.pro.coinbase.com";
+
+pub const ADVANCE_URL: &str = "wss://advanced-trade-ws.coinbase.com";

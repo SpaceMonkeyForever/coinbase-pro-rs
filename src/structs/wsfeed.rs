@@ -1,16 +1,17 @@
+use log::info;
 use super::DateTime;
 use crate::utils::{
     f64_from_string, f64_nan_from_string, f64_opt_from_string, uuid_opt_from_string,
 };
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{de, Deserialize, Deserializer, Serialize};
+use serde::de::{MapAccess, Visitor};
+use serde_json::Value;
 use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Auth {
-    pub signature: String,
-    pub key: String,
-    pub passphrase: String,
-    pub timestamp: String,
+    pub name: String,
+    pub privateKey: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -18,7 +19,7 @@ pub struct Subscribe {
     #[serde(rename = "type")]
     pub _type: SubscribeCmd,
     pub product_ids: Vec<String>,
-    pub channels: Vec<Channel>,
+    pub channel: ChannelType,
     #[serde(flatten)]
     pub auth: Option<Auth>,
 }
@@ -55,30 +56,11 @@ pub enum ChannelType {
 #[serde(tag = "type")]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum InputMessage {
-    Subscriptions {
-        channels: Vec<Channel>,
-    },
-    Heartbeat {
-        sequence: usize,
-        last_trade_id: usize,
-        product_id: String,
-        time: DateTime,
-    },
-    Status {
-        products: Vec<StatusProduct>,
-        currencies: Vec<StatusCurrency>
-    },
+    Subscriptions(Subscriptions),
+    Heartbeat(Heartbeat),
+    Status(Status),
     Ticker(Ticker),
-    Snapshot {
-        product_id: String,
-        bids: Vec<Level2SnapshotRecord>,
-        asks: Vec<Level2SnapshotRecord>,
-    },
-    L2update {
-        product_id: String,
-        changes: Vec<Level2UpdateRecord>,
-        time: DateTime,
-    },
+    Level2(Level2Book),
     LastMatch(Match),
     Received(Received),
     Open(Open),
@@ -92,59 +74,85 @@ pub(crate) enum InputMessage {
     InternalError(crate::CBError), // in futures 0.3 probably TryStream
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+pub struct Error {
+    pub message: String
+}
+
+#[derive(Debug)]
 pub enum Message {
-    Subscriptions {
-        channels: Vec<Channel>,
-    },
-    Heartbeat {
-        sequence: usize,
-        last_trade_id: usize,
-        product_id: String,
-        time: DateTime,
-    },
-    Status {
-        products: Vec<StatusProduct>,
-        currencies: Vec<StatusCurrency>
-    },
+    Subscriptions(Subscriptions),
+    Heartbeat(Heartbeat),
+    Status(Status),
     Ticker(Ticker),
-    Level2(Level2),
+    Level2(Level2Book),
     Match(Match),
     Full(Full),
-    Error {
-        message: String,
-    },
+    Error(Error),
+    Response(Response),
     InternalError(crate::CBError), // in futures 0.3 probably TryStream
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
-pub enum Level2 {
-    Snapshot {
-        product_id: String,
-        bids: Vec<Level2SnapshotRecord>,
-        asks: Vec<Level2SnapshotRecord>,
-    },
-    L2update {
-        product_id: String,
-        changes: Vec<Level2UpdateRecord>,
-        time: DateTime,
-    },
+pub enum DataType {
+    #[serde(rename = "update")]
+    Update,
+    #[serde(rename = "snapshot")]
+    Snapshot,
 }
 
-impl Level2 {
-    pub fn product_id(&self) -> &str {
-        match self {
-            Level2::Snapshot { product_id, .. } => product_id,
-            Level2::L2update { product_id, .. } => product_id,
-        }
-    }
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone, Copy)]
+#[serde(rename_all = "camelCase")]
+pub enum OrderSide {
+    Bid,
+    Offer,
+}
 
-    pub fn time(&self) -> Option<&DateTime> {
-        match self {
-            Level2::Snapshot { .. } => None,
-            Level2::L2update { time, .. } => Some(time),
-        }
-    }
+
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+pub struct Level2UpdateRecord {
+    pub side: OrderSide,
+    #[serde(deserialize_with = "f64_from_string")]
+    pub price_level: f64,
+    #[serde(deserialize_with = "f64_from_string")]
+    pub new_quantity: f64,
+    pub event_time: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+pub struct Level2Event {
+    #[serde(rename = "type")]
+    pub _type: DataType,
+    pub product_id: String,
+    pub updates: Vec<Level2UpdateRecord>,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+pub struct Subscriptions {
+    pub channels: Vec<Channel>
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+pub struct Heartbeat {
+    pub sequence: usize,
+    pub last_trade_id: usize,
+    pub product_id: String,
+    pub time: DateTime,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+pub struct Status {
+    pub products: Vec<StatusProduct>,
+    pub currencies: Vec<StatusCurrency>
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+pub struct Level2Book {
+    pub channel: String,
+    pub client_id: String,
+    pub timestamp: DateTime,
+    pub sequence_num: u64,
+    pub events: Vec<Level2Event>,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -178,23 +186,6 @@ pub struct StatusCurrency {
     #[serde(deserialize_with = "f64_from_string")]
     pub max_precision: f64,
     pub convertible_to: Vec<String>,
-}
-
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
-pub struct Level2SnapshotRecord {
-    #[serde(deserialize_with = "f64_from_string")]
-    pub price: f64,
-    #[serde(deserialize_with = "f64_from_string")]
-    pub size: f64,
-}
-
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
-pub struct Level2UpdateRecord {
-    pub side: super::reqs::OrderSide,
-    #[serde(deserialize_with = "f64_from_string")]
-    pub price: f64,
-    #[serde(deserialize_with = "f64_from_string")]
-    pub size: f64,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -504,66 +495,67 @@ pub enum StopType {
     Exit,
 }
 
-impl From<InputMessage> for Message {
-    fn from(msg: InputMessage) -> Self {
-        match msg {
-            InputMessage::Subscriptions { channels } => Message::Subscriptions { channels },
-            InputMessage::Heartbeat {
-                sequence,
-                last_trade_id,
-                product_id,
-                time,
-            } => Message::Heartbeat {
-                sequence,
-                last_trade_id,
-                product_id,
-                time,
-            },
-            InputMessage::Ticker(ticker) => Message::Ticker(ticker),
-            InputMessage::Snapshot {
-                product_id,
-                bids,
-                asks,
-            } => Message::Level2(Level2::Snapshot {
-                product_id,
-                bids,
-                asks,
-            }),
-            InputMessage::L2update {
-                product_id,
-                changes,
-                time,
-            } => Message::Level2(Level2::L2update {
-                product_id,
-                changes,
-                time,
-            }),
-            InputMessage::Status {
-                currencies,
-                products
-            } => Message::Status {
-                currencies,
-                products
-            },
-            InputMessage::LastMatch(_match) => Message::Match(_match),
-            InputMessage::Received(_match) => Message::Full(Full::Received(_match)),
-            InputMessage::Open(open) => Message::Full(Full::Open(open)),
-            InputMessage::Done(done) => Message::Full(Full::Done(done)),
-            InputMessage::Match(_match) => Message::Full(Full::Match(_match)),
-            InputMessage::Change(change) => Message::Full(Full::Change(change)),
-            InputMessage::Activate(activate) => Message::Full(Full::Activate(activate)),
-            InputMessage::Error { message } => Message::Error { message },
-            InputMessage::InternalError(err) => Message::InternalError(err),
-        }
-    }
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+pub struct SubscriptionsEvent {
+    pub level2: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+pub struct ResponseEvent {
+    pub subscriptions: SubscriptionsEvent
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+pub struct Response {
+    pub channel: String,
+    pub client_id: String,
+    pub timestamp: DateTime,
+    pub sequence_num: u64,
+    pub events: Vec<ResponseEvent>,
 }
 
 impl<'de> Deserialize<'de> for Message {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
+        where
+            D: Deserializer<'de>,
     {
-        Deserialize::deserialize(deserializer).map(|input_msg: InputMessage| input_msg.into())
+        let json_value = Value::deserialize(deserializer)?;
+
+        if let Ok(res) = serde_json::from_value::<Response>(json_value.clone()) {
+            return Ok(Message::Response(res));
+        }
+
+        if let Ok(ticker) = serde_json::from_value::<Ticker>(json_value.clone()) {
+            return Ok(Message::Ticker(ticker));
+        }
+
+        if let Ok(error) = serde_json::from_value::<Error>(json_value.clone()) {
+            return Ok(Message::Error(error));
+        }
+
+        if let Ok(subscriptions) = serde_json::from_value::<Subscriptions>(json_value.clone()) {
+            return Ok(Message::Subscriptions(subscriptions));
+        }
+
+        if let Ok(heartbeat) = serde_json::from_value::<Heartbeat>(json_value.clone()) {
+            return Ok(Message::Heartbeat(heartbeat));
+        }
+
+        if let Ok(status) = serde_json::from_value::<Status>(json_value.clone()) {
+            return Ok(Message::Status(status));
+        }
+
+        match serde_json::from_value::<Level2Book>(json_value.clone()) {
+            Ok(level2) => return Ok(Message::Level2(level2)),
+            Err(err) => {
+                info!("Error deserializing Level2: {:?}", err);
+            }
+        }
+
+
+
+        // If none of the deserializations were successful, return an error
+        Err(de::Error::custom("Unknown message type"))
     }
 }
 
