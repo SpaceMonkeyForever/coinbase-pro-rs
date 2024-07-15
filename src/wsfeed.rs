@@ -47,9 +47,7 @@ impl WSFeed {
         uri: &str,
         subscribe: Subscribe,
     ) -> Result<impl CBStream + CBSink, CBError> {
-        let url = Url::parse(uri).unwrap();
-
-        let stream = connect_async(url)
+        let stream = connect_async(uri)
             .await
             .map_err(|e| CBError::Websocket(WSError::Connect(e)))?
             .0;
@@ -99,7 +97,7 @@ pub trait CBSink: Sink<TMessage, Error = CBError> + Unpin + Send {
     async fn subscribe(
         &mut self,
         product_ids: &[&str],
-        channels: &[ChannelType],
+        _channels: &[ChannelType],
         auth: Option<Auth>,
     ) -> Result<(), CBError> {
         let subscribe = Subscribe {

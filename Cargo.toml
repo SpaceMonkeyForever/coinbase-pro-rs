@@ -14,22 +14,22 @@ keywords = [ "exchange", "coinbase", "bitcoin", "websocket" ]
 latency-tests = []
 
 [dependencies]
-async-trait = "0.1.42"
-base64 = "0.13.0"
+async-trait = "0.1.81"
+base64 = "0.22.1"
 chrono = { version = "0.4.9", features = [ "serde" ] }
-futures = { version = "0.3.8" }
-futures-util = { version = "0.3.8", features = ["compat"] }
+futures = { version = "0.3.30" }
+futures-util = { version = "0.3.30", features = ["compat"] }
 hmac = "0.10.1"
 hyper = { version = "0.14.2", features = ["stream", "client", "http1"] }
 hyper-tls = "0.5.0"
 log = "0.4.4"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+serde = { version = "1.0.204", features = ["derive"] }
+serde_json = "1.0.120"
 sha2 = "0.9.2"
 thiserror = "1.0.22"
-tokio = { version = "1.0.2", features = ["full"] }
-tokio-tungstenite = { version = "0.13.0", features = ["tls"] }
-url = "2.1.0"
+tokio = { version = "1.38.0", features = ["full"] }
+tokio-tungstenite = { version = "0.23.1", features = ["native-tls"]}
+url = "2.5.2"
 uuid = { version = "0.8.1", features = [ "serde", "v4" ] }
 
 [dev-dependencies]
