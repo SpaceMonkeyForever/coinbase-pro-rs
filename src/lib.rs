@@ -88,7 +88,7 @@ extern crate serial_test;
 pub type Result<T> = std::result::Result<T, CBError>;
 
 /// https://api.pro.coinbase.com
-pub const MAIN_URL: &str = "https://api.pro.coinbase.com";
+// pub const MAIN_URL: &str = "https://api.pro.coinbase.com";
 /// https://api-public.sandbox.pro.coinbase.com
 pub const SANDBOX_URL: &str = "https://api-public.sandbox.pro.coinbase.com";
 /// wss://ws-feed.pro.coinbase.com
@@ -97,3 +97,5 @@ pub const WS_URL: &str = "wss://ws-feed.pro.coinbase.com";
 pub const WS_SANDBOX_URL: &str = "wss://ws-feed-public.sandbox.pro.coinbase.com";
 
 pub const ADVANCE_URL: &str = "wss://advanced-trade-ws.coinbase.com";
+
+pub const REST_URL: &str = "https://api.coinbase.com/api/v3/brokerage";

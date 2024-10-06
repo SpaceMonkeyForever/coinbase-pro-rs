@@ -140,7 +140,7 @@ impl<A> Public<A> {
     where
         A: Adapter<Ticker> + 'static,
     {
-        self.get_pub(&format!("/products/{}/ticker", product_id))
+        self.get_pub(&format!("/market/products/{}/ticker", product_id))
     }
 
     pub fn get_trades(&self, product_id: &str) -> A::Result
