@@ -148,6 +148,7 @@ pub struct Status {
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct Level2Book {
     pub channel: String,
+    #[serde(default)]
     pub client_id: String,
     pub timestamp: DateTime,
     pub sequence_num: u64,
@@ -507,6 +508,7 @@ pub struct ResponseEvent {
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct Response {
     pub channel: String,
+    #[serde(default)]
     pub client_id: String,
     pub timestamp: DateTime,
     pub sequence_num: u64,
